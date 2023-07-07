@@ -1,0 +1,219 @@
+---
+# Source: splunk-otel-collector/templates/daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: splunk-otel-collector-agent
+  labels:
+    app.kubernetes.io/name: splunk-otel-collector
+    helm.sh/chart: splunk-otel-collector-0.72.0
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/version: "0.72.0"
+    app: splunk-otel-collector
+    chart: splunk-otel-collector-0.72.0
+    release: release-name
+    heritage: Helm
+spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: splunk-otel-collector
+      release: release-name
+  template:
+    metadata:
+      labels:
+        app: splunk-otel-collector
+        release: release-name
+      annotations:
+        checksum/config: 48a5ca8bae9b44f6148db7482244a83c22fc715f517fdcf61b14594c3275e0ef
+        kubectl.kubernetes.io/default-container: otel-collector
+    spec:
+      securityContext: {}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      serviceAccountName: splunk-otel-collector
+      nodeSelector:
+        kubernetes.io/os: linux
+      containers:
+      - name: otel-collector
+        command:
+        - /otelcol
+        - --config=/conf/relay.yaml
+        ports:
+        - name: jaeger-grpc
+          hostPort: 14250
+          containerPort: 14250
+          protocol: TCP
+        - name: jaeger-thrift
+          hostPort: 14268
+          containerPort: 14268
+          protocol: TCP
+        - name: otlp
+          containerPort: 4317
+          hostPort: 4317
+          protocol: TCP
+        - name: otlp-http
+          containerPort: 4318
+          protocol: TCP
+        - name: otlp-http-old
+          containerPort: 55681
+          protocol: TCP
+        - name: sfx-forwarder
+          hostPort: 9080
+          containerPort: 9080
+          protocol: TCP  
+        - name: signalfx
+          containerPort: 9943
+          hostPort: 9943
+          protocol: TCP
+        - name: zipkin
+          hostPort: 9411
+          containerPort: 9411
+          protocol: TCP
+        image: splunk-otel-collector
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: CLUSTER_ID
+            valueFrom:
+              configMapKeyRef:
+                name: cluster-metadata
+                key: id
+          - name: MY_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: MY_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: MY_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: SPLUNK_MEMORY_TOTAL_MIB
+            value: "4000"
+          - name: K8S_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: K8S_NODE_IP
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: status.hostIP
+          - name: K8S_POD_IP
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: status.podIP
+          - name: K8S_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: K8S_POD_UID
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.uid
+          - name: K8S_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: SPLUNK_OBSERVABILITY_ACCESS_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: splunk-otel-collector
+                key: splunk_observability_access_token
+          # Env variables for host metrics receiver
+          - name: HOST_PROC
+            value: /hostfs/proc
+          - name: HOST_SYS
+            value: /hostfs/sys
+          - name: HOST_ETC
+            value: /hostfs/etc
+          - name: HOST_VAR
+            value: /hostfs/var
+          - name: HOST_RUN
+            value: /hostfs/run
+          - name: HOST_DEV
+            value: /hostfs/dev
+          # until https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/5879
+          # is resolved fall back to previous gopsutil mountinfo path:
+          # https://github.com/shirou/gopsutil/issues/1271
+          - name: HOST_PROC_MOUNTINFO
+            value: /proc/self/mountinfo
+
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133
+        resources:
+          limits:
+            cpu: '2'
+            memory: 4000Mi
+          requests:
+            cpu: 500m
+            memory: 512Mi          
+        volumeMounts:
+        - name: secret-kube-etcd-client-certs
+          readOnly: true
+          mountPath: /etc/prometheus/secrets/kube-etcd-client-certs
+        - mountPath: /conf
+          name: otel-configmap
+        - mountPath: /hostfs/dev
+          name: host-dev
+          readOnly: true
+        - mountPath: /hostfs/etc
+          name: host-etc
+          readOnly: true
+        - mountPath: /hostfs/proc
+          name: host-proc
+          readOnly: true
+        - mountPath: /hostfs/run/udev/data
+          name: host-run-udev-data
+          readOnly: true
+        - mountPath: /hostfs/sys
+          name: host-sys
+          readOnly: true
+        - mountPath: /hostfs/var/run/utmp
+          name: host-var-run-utmp
+          readOnly: true
+      terminationGracePeriodSeconds: 600
+      tolerations:
+        - operator: Exists
+      volumes:
+      - name: secret-kube-etcd-client-certs
+        secret:
+          secretName: kube-etcd-client-certs
+          defaultMode: 420
+      - name: host-dev
+        hostPath:
+          path: /dev
+      - name: host-etc
+        hostPath:
+          path: /etc
+      - name: host-proc
+        hostPath:
+          path: /proc
+      - name: host-run-udev-data
+        hostPath:
+          path: /run/udev/data
+      - name: host-sys
+        hostPath:
+          path: /sys
+      - name: host-var-run-utmp
+        hostPath:
+          path: /var/run/utmp
+      - name: otel-configmap
+        configMap:
+          name: splunk-otel-collector-otel-agent
+          items:
+            - key: splunk-otel-collector-otel-agent.yaml
+              path: relay.yaml  

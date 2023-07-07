@@ -1,0 +1,20 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: paas-otel
+
+configMapGenerator:
+- name: splunk-otel-collector-otel-agent
+  behavior: create
+  files:
+    - splunk-otel-collector-otel-agent.yaml
+  options:
+    disableNameSuffixHash: true
+
+- name: splunk-otel-collector-k8s-cluster-receiver
+  behavior: create
+  files:
+    - splunk-otel-collector-otel-k8s-cluster-receiver.yaml
+  options:
+    disableNameSuffixHash: true

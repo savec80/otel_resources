@@ -1,0 +1,16 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: paas-monitoring
+
+images:
+- name: tenant-quota-exporter
+  newName: images.paas.redhat.com/itpaas-util-images/tenant-quota-exporter
+  newTag: v1
+
+resources:
+- deployment.yaml
+- configmap.yaml
+- sealed-secret.yaml
+# - rbac.yaml This is kept disabled as its managed under common/paas-monitoring/allocated-resources/allocated-resources-collector-deployment.yaml

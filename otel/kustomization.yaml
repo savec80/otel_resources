@@ -1,0 +1,22 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: paas-otel
+
+images:
+- name: splunk-otel-collector
+  newName: quay.io/signalfx/splunk-otel-collector
+  newTag: 0.78.1
+
+resources:
+- clusterrole.yaml
+- clusterrolebinding.yaml
+- daemonset.yaml
+- deployment-cluster-receiver.yaml
+- namespace.yaml
+- scc.yaml
+- serviceaccount.yaml
+- config
+# - role.yaml
+# - rolebinding.yaml

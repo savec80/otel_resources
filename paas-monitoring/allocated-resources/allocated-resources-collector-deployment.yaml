@@ -1,0 +1,88 @@
+ apiVersion: v1
+ kind: ServiceAccount
+ metadata:
+   name: paas-metrics-collector
+   namespace: paas-monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: paas-metrics-collector
+  namespace: paas-monitoring
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: paas-metrics-collector
+  namespace: paas-monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: paas-metrics-collector
+subjects:
+- kind: ServiceAccount
+  name: paas-metrics-collector
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: paas-metrics-collector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-reader
+subjects:
+- kind: ServiceAccount
+  name: paas-metrics-collector
+  namespace: paas-monitoring
+---
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  name: signalfx-allocated-resource-metrics-collector
+  namespace: paas-monitoring
+  labels:
+    appcode: APP-001
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    deployment-config.name: signalfx-allocated-resource-metrics-collector
+  strategy:
+    activeDeadlineSeconds: 21600
+    rollingParams:
+      intervalSeconds: 1
+      maxSurge: 25%
+      maxUnavailable: 25%
+      timeoutSeconds: 600
+      updatePeriodSeconds: 1
+    type: Rolling
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        deployment-config.name: signalfx-allocated-resource-metrics-collector
+        appcode: APP-001
+    spec:
+      containers:
+      - image: signalfx-allocated-resource-metrics
+        imagePullPolicy: Always
+        name: default-container
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      serviceAccount: paas-metrics-collector
+      serviceAccountName: paas-metrics-collector
+      terminationGracePeriodSeconds: 30
+  test: false
+  triggers:
+  - type: ConfigChange
